@@ -34,12 +34,13 @@ import { Op, QueryTypes } from "sequelize";
 //   - Phase 3: UPDATE rows where mcap < expected × 0.7 (price-dip recovery)
 // Both Phase 2/3 scoped to id=644 only.
 const DRY_RUN = true;
-// --merge-write enables Phase 4: per-chain merge-preserve writes against
-// existing DB rows. Chains absent from the new compute are preserved from the
-// existing row, chains present in the new compute overwrite (only when non-zero).
+// --merge-write enables a Phase 1.5/1.6 merge-preserve write against existing
+// DB rows, run BEFORE Phases 2-3. Chains absent from the new compute are
+// preserved from the existing row, chains present in the new compute overwrite
+// (only when non-zero).
 // Use this when an RWA has on-chain contracts on a chain whose SDK adapter
 // throws on historical timestamps (stellar/aptos/solana/sui/starknet/osmosis/
-// provenance) AND you've already backfilled that chain separately — Phase 4
+// provenance) AND you've already backfilled that chain separately — the merge
 // preserves your backfill values for those chains while filling in fresh data
 // from the new pipeline (peggedassets, EVM archive fetches, etc.).
 const MERGE_WRITE = process.argv.includes("--merge-write");
@@ -175,7 +176,7 @@ function convertAtvlResult(
     }
 
     // Capture per-chain totalSupply (atvlRefill writes it as `totalSupply` keyed
-    // by display name). Needed for Phase 4 merge-write to mirror the supply
+    // by display name). Needed for the merge-preserve write to mirror the supply
     // changes alongside the mcap/activemcap changes.
     const totalsupply: Record<string, number> = {};
     for (const [chain, val] of Object.entries(totalSupply ?? {})) {
@@ -797,19 +798,20 @@ export async function preflightHistoricalIncompatibleChains(ids: string[]): Prom
     console.log(`     dropping any previously-backfilled values for these chains.`);
     console.log(`     Pass --merge-write to preserve per-chain values from existing rows.`);
   } else {
-    console.log(`  ✓ --merge-write is ON. Phase 4 will preserve existing per-chain values`);
-    console.log(`    the new compute doesn't produce (e.g. stellar from your backfill).`);
+    console.log(`  ✓ --merge-write is ON. Merge-preserve write will preserve existing per-chain`);
+    console.log(`    values the new compute doesn't produce (e.g. stellar from your backfill).`);
   }
   console.log("");
   console.log(`  This warning is informational — refillParallel will continue.`);
   console.log("");
 }
 
-// ── Phase 4: Merge-preserve write ────────────────────────────────────
+// ── Phase 1.5/1.6: Merge-preserve write ──────────────────────────────
 // For each row produced by Phase 1, fetch the existing DB row and merge per
 // chain: chains the new compute has (with non-zero values) overwrite, chains
 // it doesn't have (or has at 0) are preserved from the existing row. Then
-// recompute aggregates from the merged chain map and write.
+// recompute aggregates from the merged chain map and write. Runs BEFORE
+// Phases 2-3 so spike-removal and price-fix mutations survive in the DB.
 //
 // This is the per-chain analog of the `isMissing` guard used by the
 // backfillXxxRwaMcap.ts scripts, hoisted into the refillParallel pipeline so
@@ -961,10 +963,21 @@ async function main() {
   // and the HTML preview reflect the post-merge chart shape. Without this, the
   // preview would show Phase 1's chain-dropped output (e.g. ~$52M for BRZ
   // because Stellar throws on historical and gets dropped), which is misleading.
-  // The actual DB write happens after Phase 3 if !DRY_RUN.
+  // The merged rows are persisted to DB here (before Phases 2-3) when !DRY_RUN,
+  // so Phases 2-3 then read/mutate the already-merged DB state — Phase 2 spike
+  // deletions and Phase 3 price-fix UPDATEs survive instead of being clobbered
+  // by a post-cleanup re-write.
   if (MERGE_WRITE && collectedRows.length > 0) {
     console.log(`\n── Phase 1.5: Compute merged rows (DRY_RUN=${DRY_RUN}) ──`);
     collectedRows = await computeMergedCollectedRows(collectedRows);
+
+    if (!DRY_RUN) {
+      console.log(`── Phase 1.6: Write merged rows to DB ──`);
+      await writeMergedRows(collectedRows);
+      console.log(`  Wrote ${collectedRows.length} merged rows to daily_rwa_data + backup_rwa_data`);
+    } else {
+      console.log(`  (merge-write): DRY_RUN — skipped persistence (preview reflects merged shape)`);
+    }
   }
 
   // Group collected rows by ID (only used in DRY_RUN)
@@ -997,18 +1010,6 @@ async function main() {
   // Sort results back to original ID order for consistent output
   const idOrder = new Map(IDS.map((id, i) => [id, i]));
   results.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
-
-  // Phase 4 (opt-in): Merge-preserve write — writes the merged rows computed
-  // in Phase 1.5 to daily_rwa_data + backup_rwa_data. The merge itself ran
-  // pre-Phases-2-3 so the preview reflects the post-merge shape; this step
-  // just persists those merged rows.
-  if (MERGE_WRITE && !DRY_RUN && collectedRows.length > 0) {
-    console.log(`\n── Phase 4: Write merged rows to DB ──`);
-    await writeMergedRows(collectedRows);
-    console.log(`  Wrote ${collectedRows.length} merged rows to daily_rwa_data + backup_rwa_data`);
-  } else if (MERGE_WRITE && DRY_RUN) {
-    console.log(`\n  Phase 4 (merge-write): DRY_RUN — skipped persistence (preview reflects merged shape)`);
-  }
 
   // Phase 5: Generate HTML preview
   if (results.length > 0) {
