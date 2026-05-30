@@ -18,6 +18,7 @@ import { runWithRuntimeLogging } from "../utils";
 import { TagCatetgoryMap } from "../../protocols/tags";
 import { sendMessage } from "../../utils/discord";
 import { sluggifyCategoryString } from "../../utils/sluggify";
+import { getVisibleChainsForAppMetadata, removeHiddenChainMetadata } from "./appMetadataVisibility";
 
 const allExtraSections = [...extraSections, "doublecounted", "liquidstaking", "dcAndLsOverlap", "excludeParent"];
 
@@ -205,9 +206,13 @@ async function _storeAppMetadata() {
 
   async function _storeMetadataFile() {
     const yieldProjects = new Set(yieldsData.map((pool: any) => pool.project));
+    const visibleChains = getVisibleChainsForAppMetadata(tvlData.protocols, dimensionsChainAggData);
+    const visibleChainSlugs = new Set<string>();
 
-    for (const chain of tvlData.chains) {
-      finalChains[slug(chain)] = { name: chain, id: chain };
+    for (const chain of visibleChains) {
+      const chainSlug = slug(chain);
+      visibleChainSlugs.add(chainSlug);
+      finalChains[chainSlug] = { name: chain, id: chain };
     }
 
     const parentToChildProtocols: any = {};
@@ -1002,6 +1007,7 @@ async function _storeAppMetadata() {
     }
 
     delete finalChains["off-chain"];
+    removeHiddenChainMetadata(finalChains, visibleChainSlugs);
     if (finalChains["litecoin"]) finalChains["litecoin"].dexs = false;
 
     Object.keys(finalChains).forEach((chain) => {
