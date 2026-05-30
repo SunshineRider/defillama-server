@@ -1,4 +1,5 @@
 import { excludeProtocolInCharts } from "../../utils/excludeProtocols";
+import { getChainDisplayName, getChainKeyFromLabel } from "../../utils/normalizeChain";
 import { getVisibleChainLabels } from "../../utils/visibleChains";
 
 type MetadataProtocol = {
@@ -40,4 +41,16 @@ export function removeHiddenChainMetadata<T>(finalChains: Record<string, T>, vis
   for (const chain in finalChains) {
     if (!visibleChainSlugs.has(chain)) delete finalChains[chain];
   }
+}
+
+export function getVisibleChainMetadataEntry(
+  chain: string,
+  visibleChainSlugs: Set<string>,
+  slug: (chain: string) => string
+) {
+  const chainName = getChainDisplayName(getChainKeyFromLabel(chain), true);
+  const chainSlug = slug(chainName);
+  if (!visibleChainSlugs.has(chainSlug)) return null;
+
+  return { name: chainName, slug: chainSlug };
 }

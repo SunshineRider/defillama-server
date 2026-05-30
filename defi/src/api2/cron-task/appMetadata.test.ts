@@ -1,4 +1,10 @@
-import { getVisibleChainsForAppMetadata, removeHiddenChainMetadata } from "./appMetadataVisibility";
+import {
+  getVisibleChainMetadataEntry,
+  getVisibleChainsForAppMetadata,
+  removeHiddenChainMetadata,
+} from "./appMetadataVisibility";
+
+const slug = (chain: string) => chain.toLowerCase().split(" ").join("-").split("'").join("");
 
 describe("app metadata chain visibility", () => {
   test("derives visible chains from current protocol tvl and dimensions data", () => {
@@ -62,6 +68,20 @@ describe("app metadata chain visibility", () => {
     expect(finalChains).toEqual({
       ethereum: { name: "Ethereum", id: "Ethereum" },
     });
+  });
+
+  test("canonicalizes legacy chain labels before writing metadata", () => {
+    const visibleChainSlugs = new Set(["op-mainnet", "multiversx"]);
+
+    expect(getVisibleChainMetadataEntry("Optimism", visibleChainSlugs, slug)).toEqual({
+      name: "OP Mainnet",
+      slug: "op-mainnet",
+    });
+    expect(getVisibleChainMetadataEntry("Elrond", visibleChainSlugs, slug)).toEqual({
+      name: "MultiversX",
+      slug: "multiversx",
+    });
+    expect(getVisibleChainMetadataEntry("HyperEVM", visibleChainSlugs, slug)).toBeNull();
   });
 
   test("keeps visible dimension-backed chains without protocol tvl", () => {
