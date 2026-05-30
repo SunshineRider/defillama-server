@@ -1,5 +1,7 @@
 import { chainCoingeckoIds, getChainDisplayName, getChainKeyFromLabel } from "./normalizeChain";
 
+type ChainTvls = Record<string, { tvl?: number | null }>;
+
 export function hasDimensionsChainVisibility(chainAggData: any = {}) {
   if (typeof chainAggData !== "object" || chainAggData === null) return false;
 
@@ -24,6 +26,23 @@ function getVisibleChainLabel(chain: string) {
   if (!chain) return null;
 
   return getChainDisplayName(getChainKeyFromLabel(chain), true);
+}
+
+export function addAdjustedChainTvls(
+  protocolChainTvls: { [chain: string]: number },
+  chainTvls: ChainTvls,
+  chains: string[]
+) {
+  for (const chain of chains) {
+    protocolChainTvls[chain] =
+      (protocolChainTvls[chain] ?? 0) +
+      (chainTvls[chain]?.tvl ?? 0) -
+      (chainTvls[`${chain}-liquidstaking`]?.tvl ?? 0) -
+      (chainTvls[`${chain}-doublecounted`]?.tvl ?? 0) +
+      (chainTvls[`${chain}-dcAndLsOverlap`]?.tvl ?? 0);
+  }
+
+  return protocolChainTvls;
 }
 
 export function getVisibleChainLabels(

@@ -70,6 +70,31 @@ describe("app metadata chain visibility", () => {
     });
   });
 
+  test("collapses legacy alias metadata to the visible canonical chain", () => {
+    const finalChains = {
+      "op-mainnet": { name: "OP Mainnet", id: "OP Mainnet", protocolCount: 1 },
+      optimism: {
+        name: "Optimism",
+        id: "Optimism",
+        fees: true,
+        dimAgg: { fees: { df: { "24h": 1 } } },
+        protocolCount: 0,
+      },
+    };
+
+    removeHiddenChainMetadata(finalChains, new Set(["op-mainnet"]));
+
+    expect(finalChains).toEqual({
+      "op-mainnet": {
+        name: "OP Mainnet",
+        id: "OP Mainnet",
+        fees: true,
+        dimAgg: { fees: { df: { "24h": 1 } } },
+        protocolCount: 1,
+      },
+    });
+  });
+
   test("canonicalizes legacy chain labels before writing metadata", () => {
     const visibleChainSlugs = new Set(["op-mainnet", "multiversx"]);
 

@@ -9,7 +9,7 @@ import fetch from "node-fetch";
 import { excludeProtocolInCharts, hiddenCategoriesFromUISet } from "./utils/excludeProtocols";
 import protocols from "./protocols/data";
 import { readRouteData } from "./api2/cache/file-cache";
-import { getVisibleChainLabels, hasDimensionsChainVisibility } from "./utils/visibleChains";
+import { addAdjustedChainTvls, getVisibleChainLabels, hasDimensionsChainVisibility } from "./utils/visibleChains";
 
 export { getVisibleChainLabels, hasDimensionsChainVisibility };
 
@@ -113,21 +113,7 @@ export async function storeGetProtocols({
 
     protocolCategoriesSet.add(p.category);
     if (!excludeProtocolInCharts(p.category)) {
-      p.chains.forEach((c: string) => {
-        chains[c] = (chains[c] ?? 0) + (p.chainTvls[c]?.tvl ?? 0);
-
-        if (p.chainTvls[`${c}-liquidstaking`]) {
-          chains[c] = (chains[c] ?? 0) - (p.chainTvls[`${c}-liquidstaking`]?.tvl ?? 0);
-        }
-
-        if (p.chainTvls[`${c}-doublecounted`]) {
-          chains[c] = (chains[c] ?? 0) - (p.chainTvls[`${c}-doublecounted`]?.tvl ?? 0);
-        }
-
-        if (p.chainTvls[`${c}-dcAndLsOverlap`]) {
-          chains[c] = (chains[c] ?? 0) + (p.chainTvls[`${c}-dcAndLsOverlap`]?.tvl ?? 0);
-        }
-      });
+      addAdjustedChainTvls(chains, p.chainTvls, p.chains);
     }
   });
 

@@ -1,6 +1,6 @@
 import { excludeProtocolInCharts } from "../../utils/excludeProtocols";
 import { getChainDisplayName, getChainKeyFromLabel } from "../../utils/normalizeChain";
-import { getVisibleChainLabels } from "../../utils/visibleChains";
+import { addAdjustedChainTvls, getVisibleChainLabels } from "../../utils/visibleChains";
 
 type MetadataProtocol = {
   category?: string;
@@ -16,29 +16,37 @@ export function getVisibleChainsForAppMetadata(
   for (const protocol of protocols) {
     if (!protocol.category || excludeProtocolInCharts(protocol.category)) continue;
 
-    const chainTvls = protocol.chainTvls ?? {};
-    for (const chain of protocol.chains ?? []) {
-      protocolChainTvls[chain] = (protocolChainTvls[chain] ?? 0) + (chainTvls[chain]?.tvl ?? 0);
-
-      if (chainTvls[`${chain}-liquidstaking`]) {
-        protocolChainTvls[chain] -= chainTvls[`${chain}-liquidstaking`]?.tvl ?? 0;
-      }
-
-      if (chainTvls[`${chain}-doublecounted`]) {
-        protocolChainTvls[chain] -= chainTvls[`${chain}-doublecounted`]?.tvl ?? 0;
-      }
-
-      if (chainTvls[`${chain}-dcAndLsOverlap`]) {
-        protocolChainTvls[chain] += chainTvls[`${chain}-dcAndLsOverlap`]?.tvl ?? 0;
-      }
-    }
+    addAdjustedChainTvls(protocolChainTvls, protocol.chainTvls ?? {}, protocol.chains ?? []);
   }
 
   return getVisibleChainLabels(protocolChainTvls, dimensionsChainAggData);
 }
 
-export function removeHiddenChainMetadata<T>(finalChains: Record<string, T>, visibleChainSlugs: Set<string>) {
+const slug = (chain: string) => chain.toLowerCase().split(" ").join("-").split("'").join("");
+
+function getCanonicalChainMetadata(chain: string) {
+  const chainName = getChainDisplayName(getChainKeyFromLabel(chain), true);
+
+  return { name: chainName, slug: slug(chainName) };
+}
+
+export function removeHiddenChainMetadata<T extends { name: string; id: string }>(
+  finalChains: Record<string, T>,
+  visibleChainSlugs: Set<string>
+) {
   for (const chain in finalChains) {
+    const canonicalChain = getCanonicalChainMetadata(chain);
+    if (canonicalChain.slug !== chain && visibleChainSlugs.has(canonicalChain.slug)) {
+      finalChains[canonicalChain.slug] = {
+        ...finalChains[chain],
+        ...finalChains[canonicalChain.slug],
+        name: canonicalChain.name,
+        id: canonicalChain.name,
+      } as T;
+      delete finalChains[chain];
+      continue;
+    }
+
     if (!visibleChainSlugs.has(chain)) delete finalChains[chain];
   }
 }
@@ -48,9 +56,9 @@ export function getVisibleChainMetadataEntry(
   visibleChainSlugs: Set<string>,
   slug: (chain: string) => string
 ) {
-  const chainName = getChainDisplayName(getChainKeyFromLabel(chain), true);
-  const chainSlug = slug(chainName);
+  const canonicalChain = getCanonicalChainMetadata(chain);
+  const chainSlug = slug(canonicalChain.name);
   if (!visibleChainSlugs.has(chainSlug)) return null;
 
-  return { name: chainName, slug: chainSlug };
+  return { name: canonicalChain.name, slug: chainSlug };
 }
