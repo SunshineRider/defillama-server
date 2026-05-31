@@ -5300,5 +5300,28 @@ const data6: Protocol[] = [
       "bridge-aggregators": "superswap",
     }
   },
+  {
+    id: "7960",
+    name: "MineBTC",
+    address: "solana:CtAu3kc8cQ1jcDMmRTBsDHoPuE3sswCagQ3BuqFDC6dt",
+    symbol: "dBTC",
+    url: "https://minebtc.fun",
+    description:
+      "MineBTC is a Solana casino-mining game where players run SOL autominers, call country-race outcomes, and earn dBTC through Casino rolls, Country Race payouts, staking rewards, buybacks, and burned LP. HashBeast NFTs add boosts, identity, and game events.",
+    chain: "Solana",
+    logo: `${baseIconsUrl}/minebtc-fun.jpg`,
+    audits: "0",
+    gecko_id: null,
+    cmcId: null,
+    category: "Gamified Mining",
+    chains: ["Solana"],
+    module: "minebtc-fun/index.js",
+    twitter: "minebtcdotfun",
+    treasury: "minebtc-fun.js",
+    listedAt: 1780189534,
+    dimensions: {
+      fees: "minebtc-fun",
+    },
+  },
 ];
 export default data6;

@@ -11745,6 +11745,8 @@ const data5: Protocol[] = [
     chains: ["Solana"],
     module: "minebtc/index.js",
     twitter: "minebtcdotfun",
+    deadFrom: "2026-05-31",
+    deprecated: true,
     dimensions: {
       fees: "minebtc",
     },
